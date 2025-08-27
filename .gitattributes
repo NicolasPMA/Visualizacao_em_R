@@ -1,0 +1,12 @@
+# Conte o código R e Rmd como "R"
+*.R      linguist-detectable=true
+*.Rmd    linguist-detectable=true
+*.Rmd    linguist-language=R
+
+# Ignore arquivos gerados
+*.html   linguist-detectable=false
+*.pdf    linguist-detectable=false
+*.png    linguist-detectable=false
+*.jpg    linguist-detectable=false
+*.jpeg   linguist-detectable=false
+*.gif    linguist-detectable=false
