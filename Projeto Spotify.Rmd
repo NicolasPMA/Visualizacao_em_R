@@ -1,0 +1,273 @@
+---
+title: "Análise de Visualização - Spotify 2023"
+author: "Nicolas Pereira de Mello Andrade"
+output: html_document
+---
+
+Bibliotecas utilizadas e carregamento do dataset:
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(janitor)
+library(summarytools)
+library(stringr)
+
+spotify <- read_csv("spotify-2023.csv", locale = locale(encoding = "UTF-8"))
+spotify$streams <- as.numeric(str_replace_all(spotify$streams, ",", ""))
+
+```
+
+## Estrutura Inicial do Dataset
+
+Visualização da estrutura geral do dataset:
+
+```{r}
+glimpse(spotify)
+```
+
+Padronização dos nomes das colunas:
+
+```{r}
+spotify <- clean_names(spotify)
+```
+
+Remoção de caracteres especiais das colunas textuais:
+
+```{r}
+colunas_texto <- sapply(spotify, is.character)
+spotify[colunas_texto] <- lapply(spotify[colunas_texto], function(coluna) {
+  str_replace_all(coluna, "[^\\x00-\\x7F]", "")
+})
+```
+
+Resumo estatístico visual completo:
+
+```{r}
+dfSummary(spotify)
+```
+
+## Contagens e Verificação de Dados
+
+Contagem dos valores distintos em variáveis-chave:
+
+```{r}
+# Identifica o número de músicas únicas
+n_distinct(spotify$track_name)
+
+# Mostra quantos artistas diferentes estão presentes
+n_distinct(spotify$artist_s_name)
+
+# Revela quantos anos distintos de lançamento existem no dataset
+n_distinct(spotify$released_year)
+
+# Informa a quantidade de modos musicais distintos (geralmente dois: maior e menor)
+n_distinct(spotify$mode)
+```
+
+Verificação da quantidade de valores ausentes por coluna:
+
+```{r}
+spotify %>%
+  summarise(across(everything(), ~ sum(is.na(.)))) %>%
+  t()
+```
+
+## Média de Streams por Ano
+
+Agrupamento por ano e cálculo da média de streams:
+
+```{r}
+spotify %>%
+  group_by(released_year) %>%
+  summarise(media_streams = mean(streams, na.rm = TRUE)) %>%
+  arrange(desc(media_streams))
+```
+
+## Filtragem de Anos com Muitas Músicas
+
+Remoção dos anos com menos de 10 músicas:
+
+```{r}
+spotify_filtrado <- spotify %>%
+  group_by(released_year) %>%
+  filter(n() > 10) %>%
+  ungroup()
+```
+
+## Gráfico de Dispersão
+**Pergunta:** Existe uma relação entre a danceabilidade da música e seu número de streams?
+
+**Explicação:** Cria gráfico de dispersão com linha de tendência (regressão linear):
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(spotify_filtrado, aes(x = danceability_percent, y = streams)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(
+    title = "Relação entre Danceabilidade e Streams",
+    x = "Danceabilidade (%)",
+    y = "Número de Streams"
+  )
+```
+
+**Interpretação:**  
+O gráfico mostra uma fraca tendência negativa: músicas mais dançantes não têm necessariamente mais streams. A linha azul representa a regressão linear ajustada.
+
+**Pergunta:** Existe relação entre a energia da música e a sua popularidade (streams)?
+
+**Explicação:** Gera gráfico de dispersão para examinar a relação entre energia e número de streams:
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(spotify_filtrado, aes(x = energy_percent, y = streams)) +
+  geom_point(alpha = 0.4, color = "darkred") +
+  geom_smooth(method = "lm", se = FALSE, color = "orange") +
+  labs(
+    title = "Energia vs. Streams",
+    x = "Energia (%)",
+    y = "Número de Streams"
+  )
+```
+
+**Interpretação:**  
+Há uma leve tendência positiva: músicas com maior energia tendem a ter mais streams, embora a dispersão de pontos indique que outros fatores também influenciam.
+
+---
+
+## Histograma
+**Pergunta:** Qual é a distribuição de BPM das músicas mais populares?
+
+**Explicação:** Gera histograma com 30 faixas (bins) para BPM:
+
+```{r}
+ggplot(spotify, aes(x = bpm)) +
+  geom_histogram(fill = "steelblue", bins = 30, color = "white") +
+  labs(
+    title = "Distribuição de BPM (Batimentos por Minuto)",
+    x = "BPM",
+    y = "Frequência"
+  )
+```
+
+**Interpretação:**  
+O histograma mostra que a maioria das músicas está entre **90 e 130 BPM**, ritmo comum em gêneros pop e eletrônicos. Há poucas músicas com BPM muito altos ou baixos.
+
+**Pergunta:** Como é distribuído o número de streams (com escala log)?
+
+**Explicação:** Cria histograma da variável `streams`, aplicando transformação logarítmica:
+
+```{r, message=FALSE, warning=FALSE}
+ggplot(spotify, aes(x = streams)) +
+  geom_histogram(fill = "purple", bins = 30, color = "white") +
+  scale_x_log10() +
+  labs(
+    title = "Distribuição Logarítmica de Streams",
+    x = "Número de Streams (log10)",
+    y = "Frequência"
+  )
+```
+
+**Interpretação:**  
+A escala log revela que há grande concentração de músicas com baixos valores de streams, enquanto poucas atingem números extremamente altos.
+
+---
+
+## Boxplot
+**Pergunta:** O modo musical (maior ou menor) influencia no número de streams?
+
+**Explicação:** Cria boxplot comparando streams entre músicas em modo maior e menor:
+
+```{r}
+ggplot(spotify, aes(x = mode, y = streams)) +
+  geom_boxplot(fill = "lightblue", outlier.color = "red", outlier.shape = 1, na.rm = TRUE) +
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_si("B"))) +
+  labs(
+    title = "Distribuição de Streams por Modo Musical",
+    x = "Modo Musical",
+    y = "Número de Streams"
+  )
+```
+
+**Interpretação:**  
+As medianas de streams são semelhantes entre os modos, mas músicas em **modo maior** apresentam mais outliers com altos números de reproduções. Isso sugere que o modo maior pode favorecer o alcance de grandes audiências.
+
+**Pergunta:** Há variação na distribuição de streams ao longo dos meses?
+
+**Explicação:** Cria boxplots lado a lado por mês de lançamento:
+
+```{r}
+ggplot(spotify, aes(x = factor(released_month), y = streams)) +
+  geom_boxplot(fill = "coral", outlier.color = "black", outlier.shape = 16, na.rm = TRUE) +
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_si("B"))) +
+  labs(
+    title = "Distribuição de Streams por Mês de Lançamento",
+    x = "Mês de Lançamento",
+    y = "Número de Streams"
+  )
+```
+
+**Interpretação:**  
+Embora a mediana seja parecida entre os meses, há maior dispersão de valores em certos períodos, como julho e dezembro, sugerindo sazonalidade na popularidade das músicas.
+
+---
+
+## Gráfico de Barras
+**Pergunta:** Quais são os tons musicais (keys) mais comuns nas músicas mais populares?
+
+**Explicação:** Agrupa por tom (`key`) e ordena pela contagem decrescente:
+
+```{r}
+ggplot(spotify %>% count(key, sort = TRUE), aes(x = reorder(key, n), y = n)) +
+  geom_bar(stat = "identity", fill = "darkgreen") +
+  coord_flip() +
+  labs(
+    title = "Frequência de Tons Musicais (Key) nas Músicas",
+    x = "Tom Musical",
+    y = "Quantidade de Músicas"
+  )
+```
+
+**Interpretação:**  
+O gráfico mostra os tons musicais mais frequentes entre as músicas do dataset. Os tons mais utilizados podem indicar preferências harmônicas comuns em músicas populares.
+
+**Pergunta:** Como está distribuída a quantidade de músicas lançadas por ano?
+
+**Explicação:** Gera gráfico de colunas com ordenação e destaque para o tempo:
+
+```{r}
+ggplot(spotify %>% count(released_year), aes(x = released_year, y = n)) +
+  geom_col(fill = "dodgerblue") +
+  labs(
+    title = "Quantidade de Músicas por Ano de Lançamento",
+    x = "Ano",
+    y = "Número de Músicas"
+  )
+```
+
+**Interpretação:**  
+A maior concentração está nos anos mais recentes, refletindo a modernidade do dataset ou uma tendência de crescimento na produção musical recente.
+
+---
+
+## Gráfico de Linha
+**Pergunta:** A média de streams por ano tem aumentado ou diminuído ao longo do tempo?
+
+**Explicação:** Cria gráfico de linha com a média de streams por ano de lançamento:
+
+```{r, message=FALSE, warning=FALSE}
+spotify %>%
+  group_by(released_year) %>%
+  summarise(media_streams = mean(streams, na.rm = TRUE)) %>%
+  ggplot(aes(x = released_year, y = media_streams)) +
+  geom_line(color = "darkorange", size = 1) +
+  geom_point(color = "black") +
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_si("B"))) +
+  labs(
+    title = "Média de Streams por Ano de Lançamento",
+    x = "Ano",
+    y = "Média de Streams"
+  )
+```
+
+**Interpretação:**  
+Há variação considerável ao longo das décadas, com picos em anos específicos. Isso pode refletir tanto fenômenos culturais quanto mudanças nas plataformas de streaming.
